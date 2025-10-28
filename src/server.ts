@@ -2,6 +2,7 @@ import bodyParser from "body-parser";
 import { log } from "console";
 import express, { Express } from "express";
 import { loggerMiddleware } from "./middleware/logger";
+import router from "./routes/user";
 
 
 
@@ -12,7 +13,10 @@ app.use(express.json())
 
 app.use(bodyParser.json())
 
-app.use(loggerMiddleware)
+
+app.use(loggerMiddleware);
+//http://localhost:3000/v1/users/8
+app.use("/v1/users", router)
 
 
 app.listen(PORT,  () =>{
