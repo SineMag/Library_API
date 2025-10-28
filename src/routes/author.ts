@@ -1,14 +1,11 @@
 
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { body, param, validationResult } from "express-validator";
 import { Author } from "../models/author";
+import { authors } from "../data";
+import { NotFoundError, BadRequestError } from "../errors/customErrors";
 
 const router = Router();
-
-let authors: Author[] = [
-    {id: 1, name: "J.K. Rowling", bio: "British author"},
-    {id: 2, name: "George Orwell", bio: "English novelist"},
-];
 
 // GET all authors
 router.get("/", (req: Request, res: Response) => {
@@ -16,17 +13,17 @@ router.get("/", (req: Request, res: Response) => {
 });
 
 // GET author by ID
-router.get("/:id", [param("id").isInt().withMessage("ID must be an integer")], (req: Request, res: Response) => {
+router.get("/:id", [param("id").isInt().withMessage("ID must be an integer")], (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return next(new BadRequestError(errors.array()[0].msg));
     }
 
     const { id } = req.params;
     const author = authors.find((author) => author.id === parseInt(id));
 
     if (!author) {
-        return res.status(404).send("Author not found");
+        return next(new NotFoundError("Author not found"));
     }
 
     res.status(200).json(author);
@@ -36,10 +33,10 @@ router.get("/:id", [param("id").isInt().withMessage("ID must be an integer")], (
 router.post("/", [
     body("name").isString().withMessage("Name must be a string"),
     body("bio").isString().withMessage("Bio must be a string"),
-], (req: Request, res: Response) => {
+], (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return next(new BadRequestError(errors.array()[0].msg));
     }
 
     const newAuthor: Author = {
@@ -57,17 +54,17 @@ router.put("/:id", [
     param("id").isInt().withMessage("ID must be an integer"),
     body("name").isString().optional(),
     body("bio").isString().optional(),
-], (req: Request, res: Response) => {
+], (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return next(new BadRequestError(errors.array()[0].msg));
     }
 
     const { id } = req.params;
     const authorIndex = authors.findIndex((author) => author.id === parseInt(id));
 
     if (authorIndex === -1) {
-        return res.status(404).send("Author not found");
+        return next(new NotFoundError("Author not found"));
     }
 
     const updatedAuthor = { ...authors[authorIndex], ...req.body };
@@ -77,21 +74,41 @@ router.put("/:id", [
 });
 
 // DELETE author
-router.delete("/:id", [param("id").isInt().withMessage("ID must be an integer")], (req: Request, res: Response) => {
+router.delete("/:id", [param("id").isInt().withMessage("ID must be an integer")], (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return next(new BadRequestError(errors.array()[0].msg));
     }
 
     const { id } = req.params;
     const authorIndex = authors.findIndex((author) => author.id === parseInt(id));
 
     if (authorIndex === -1) {
-        return res.status(404).send("Author not found");
+        return next(new NotFoundError("Author not found"));
     }
 
     authors.splice(authorIndex, 1);
     res.status(204).send();
+});
+
+import { books } from "../data";
+
+// GET books by author ID
+router.get("/:id/books", [param("id").isInt().withMessage("ID must be an integer")], (req: Request, res: Response, next: NextFunction) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return next(new BadRequestError(errors.array()[0].msg));
+    }
+
+    const { id } = req.params;
+    const author = authors.find((author) => author.id === parseInt(id));
+
+    if (!author) {
+        return next(new NotFoundError("Author not found"));
+    }
+
+    const authorBooks = books.filter((book) => book.authorId === parseInt(id));
+    res.status(200).json(authorBooks);
 });
 
 export default router;

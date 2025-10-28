@@ -1,14 +1,11 @@
 
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { body, param, validationResult } from "express-validator";
 import { Book } from "../models/book";
+import { books, authors } from "../data";
+import { NotFoundError, BadRequestError, ConflictError } from "../errors/customErrors";
 
 const router = Router();
-
-let books: Book[] = [
-    {id: 1, title: "Harry Potter", authorId: 1, publishedYear: 1997},
-    {id: 2, title: "1984", authorId: 2, publishedYear: 1949},
-];
 
 // GET all books
 router.get("/", (req: Request, res: Response) => {
@@ -16,17 +13,17 @@ router.get("/", (req: Request, res: Response) => {
 });
 
 // GET book by ID
-router.get("/:id", [param("id").isInt().withMessage("ID must be an integer")], (req: Request, res: Response) => {
+router.get("/:id", [param("id").isInt().withMessage("ID must be an integer")], (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return next(new BadRequestError(errors.array()[0].msg));
     }
 
     const { id } = req.params;
     const book = books.find((book) => book.id === parseInt(id));
 
     if (!book) {
-        return res.status(404).send("Book not found");
+        return next(new NotFoundError("Book not found"));
     }
 
     res.status(200).json(book);
@@ -35,12 +32,25 @@ router.get("/:id", [param("id").isInt().withMessage("ID must be an integer")], (
 // POST new book
 router.post("/", [
     body("title").isString().withMessage("Title must be a string"),
-    body("authorId").isInt().withMessage("authorId must be an integer"),
+    body("authorId").isInt().withMessage("authorId must be an integer").custom((value) => {
+        const authorExists = authors.some(author => author.id === value);
+        if (!authorExists) {
+            throw new Error("Author not found");
+        }
+        return true;
+    }),
     body("publishedYear").isInt().withMessage("publishedYear must be an integer"),
-], (req: Request, res: Response) => {
+], (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return next(new BadRequestError(errors.array()[0].msg));
+    }
+
+    const { title, authorId } = req.body;
+
+    const bookExists = books.some(book => book.title === title && book.authorId === authorId);
+    if (bookExists) {
+        return next(new ConflictError("Book already exists"));
     }
 
     const newBook: Book = {
@@ -58,19 +68,27 @@ router.post("/", [
 router.put("/:id", [
     param("id").isInt().withMessage("ID must be an integer"),
     body("title").isString().optional(),
-    body("authorId").isInt().optional(),
+    body("authorId").isInt().optional().custom((value) => {
+        if (value) {
+            const authorExists = authors.some(author => author.id === value);
+            if (!authorExists) {
+                throw new Error("Author not found");
+            }
+        }
+        return true;
+    }),
     body("publishedYear").isInt().optional(),
-], (req: Request, res: Response) => {
+], (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return next(new BadRequestError(errors.array()[0].msg));
     }
 
     const { id } = req.params;
     const bookIndex = books.findIndex((book) => book.id === parseInt(id));
 
     if (bookIndex === -1) {
-        return res.status(404).send("Book not found");
+        return next(new NotFoundError("Book not found"));
     }
 
     const updatedBook = { ...books[bookIndex], ...req.body };
@@ -80,17 +98,17 @@ router.put("/:id", [
 });
 
 // DELETE book
-router.delete("/:id", [param("id").isInt().withMessage("ID must be an integer")], (req: Request, res: Response) => {
+router.delete("/:id", [param("id").isInt().withMessage("ID must be an integer")], (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return next(new BadRequestError(errors.array()[0].msg));
     }
 
     const { id } = req.params;
     const bookIndex = books.findIndex((book) => book.id === parseInt(id));
 
     if (bookIndex === -1) {
-        return res.status(404).send("Book not found");
+        return next(new NotFoundError("Book not found"));
     }
 
     books.splice(bookIndex, 1);
